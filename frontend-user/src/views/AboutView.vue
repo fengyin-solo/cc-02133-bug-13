@@ -75,7 +75,14 @@
           subtitle="以客户为中心，以创新为驱动"
         />
         <div class="culture-grid">
-          <div class="culture-card" v-for="culture in cultures" :key="culture.title">
+          <button
+            v-for="culture in cultures"
+            :key="culture.key"
+            type="button"
+            class="culture-card"
+            :class="{ active: activeCultureKey === culture.key }"
+            @click="switchCulture(culture.key)"
+          >
             <div class="culture-icon">
               <el-icon :size="36">
                 <component :is="culture.icon" />
@@ -83,8 +90,22 @@
             </div>
             <h3>{{ culture.title }}</h3>
             <p>{{ culture.description }}</p>
-          </div>
+          </button>
         </div>
+        <!-- 详情区按 key 整体重建：切换后不会残留上一段内容 -->
+        <transition name="culture-fade" mode="out-in">
+          <div :key="activeCulture.key" class="culture-detail">
+            <div class="culture-detail-icon">
+              <el-icon :size="28">
+                <component :is="activeCulture.icon" />
+              </el-icon>
+            </div>
+            <div class="culture-detail-text">
+              <h3>{{ activeCulture.title }}</h3>
+              <p>{{ activeCulture.detail }}</p>
+            </div>
+          </div>
+        </transition>
       </div>
     </section>
     
@@ -111,86 +132,45 @@
 </template>
 
 <script setup>
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import SectionTitle from '@/components/SectionTitle.vue'
+import {
+  buildTimeline,
+  buildCultures,
+  buildTeam,
+  resolveCultureKey
+} from '@/utils/aboutData'
 
-const timeline = [
-  {
-    year: '2018',
-    title: '公司成立',
-    description: '广州知运信息技术有限公司在广州正式成立，开启智慧物流创业之路'
-  },
-  {
-    year: '2019',
-    title: '产品发布',
-    description: '首款智慧仓储系统正式发布，获得首批客户认可'
-  },
-  {
-    year: '2020',
-    title: '业务拓展',
-    description: '推出运输管理系统，服务客户突破100家'
-  },
-  {
-    year: '2021',
-    title: '技术突破',
-    description: '获得多项技术专利，被认定为高新技术企业'
-  },
-  {
-    year: '2022',
-    title: '规模扩张',
-    description: '团队规模突破200人，服务客户超过300家'
-  },
-  {
-    year: '2024',
-    title: '行业领先',
-    description: '成为智慧物流领域领先服务商，服务客户超过500家'
-  }
-]
+const route = useRoute()
+const router = useRouter()
 
-const cultures = [
-  {
-    icon: 'Aim',
-    title: '使命',
-    description: '用科技让物流更简单，助力企业降本增效'
-  },
-  {
-    icon: 'View',
-    title: '愿景',
-    description: '成为中国最值得信赖的智慧物流服务商'
-  },
-  {
-    icon: 'Star',
-    title: '价值观',
-    description: '客户第一、创新驱动、诚信务实、合作共赢'
-  },
-  {
-    icon: 'Promotion',
-    title: '精神',
-    description: '追求卓越、永不止步、勇于担当、团队协作'
-  }
-]
+// 时间、组织关系、文案均经统一判定规则规范化，不直接使用原始录入
+const timeline = buildTimeline()
+const cultures = buildCultures()
+const team = buildTeam()
 
-const team = [
-  {
-    name: '张总',
-    title: 'CEO / 创始人',
-    description: '20年物流行业经验，曾任知名物流企业高管'
-  },
-  {
-    name: '李总',
-    title: 'CTO / 联合创始人',
-    description: '15年技术研发经验，前互联网大厂技术总监'
-  },
-  {
-    name: '王总',
-    title: 'COO',
-    description: '10年运营管理经验，精通供应链管理'
-  },
-  {
-    name: '陈总',
-    title: '产品VP',
-    description: '12年产品经验，深耕物流行业产品设计'
+// 文化切换状态由路由 query 派生：前进/后退/刷新/手输 URL 结果一致
+const activeCultureKey = ref(resolveCultureKey(route.query.culture, cultures))
+
+const activeCulture = computed(
+  () => cultures.find((item) => item.key === activeCultureKey.value) || cultures[0]
+)
+
+const switchCulture = (key) => {
+  const next = resolveCultureKey(key, cultures)
+  if (next === activeCultureKey.value) return
+  // 使用 push 产生历史记录，浏览器前进/后退均可恢复
+  router.push({ query: { ...route.query, culture: next } })
+}
+
+// 浏览器前进/后退或外部改 URL 时，按同一判定规则同步，非法值回退首项
+watch(
+  () => route.query.culture,
+  (rawKey) => {
+    activeCultureKey.value = resolveCultureKey(rawKey, cultures)
   }
-]
+)
 </script>
 
 <style lang="scss" scoped>
@@ -347,11 +327,18 @@ const team = [
   border-radius: $radius-lg;
   text-align: center;
   box-shadow: $shadow-md;
+  border: 2px solid transparent;
+  font: inherit;
+  cursor: pointer;
   transition: all 0.3s;
-  
+
   &:hover {
     transform: translateY(-8px);
     box-shadow: $shadow-lg;
+  }
+
+  &.active {
+    border-color: $primary-color;
   }
 }
 
@@ -377,6 +364,53 @@ const team = [
   font-size: $font-size-sm;
   color: $text-secondary;
   line-height: $line-height-loose;
+}
+
+.culture-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-lg;
+  margin-top: $spacing-lg;
+  padding: $spacing-lg $spacing-xl;
+  background: $bg-white;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+}
+
+.culture-detail-icon {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  background: rgba($primary-color, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $primary-color;
+}
+
+.culture-detail-text {
+  h3 {
+    font-size: $font-size-lg;
+    color: $text-primary;
+    margin-bottom: $spacing-xs;
+  }
+
+  p {
+    font-size: $font-size-sm;
+    color: $text-regular;
+    line-height: $line-height-loose;
+  }
+}
+
+.culture-fade-enter-active,
+.culture-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.culture-fade-enter-from,
+.culture-fade-leave-to {
+  opacity: 0;
 }
 
 .team-grid {
@@ -464,7 +498,12 @@ const team = [
   .team-grid {
     grid-template-columns: 1fr;
   }
-  
+
+  .culture-detail {
+    flex-direction: column;
+    gap: $spacing-md;
+  }
+
   .intro-stats {
     flex-wrap: wrap;
   }
